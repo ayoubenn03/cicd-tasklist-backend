@@ -36,9 +36,80 @@ describe("Task API E2E Tests", () => {
 	});
 
 	// ... TODO: Add more tests
-	/*
 	describe("GET /api/tasks", () => {
-		...	
+	it("should return an empty array when there are no tasks", async () => {
+		const res = await request(app).get("/api/tasks");
+
+		expect(res.status).toBe(200);
+		expect(res.body).toEqual([]);
 	});
-	*/
+
+	it("should return all tasks", async () => {
+		await testPrisma.task.create({ data: { title: "Task 1" } });
+		await testPrisma.task.create({ data: { title: "Task 2" } });
+
+		const res = await request(app).get("/api/tasks");
+
+		expect(res.status).toBe(200);
+		expect(res.body).toHaveLength(2);
+	});
+});
+
+describe("GET /api/tasks/:id", () => {
+	it("should return the task when found", async () => {
+		const task = await testPrisma.task.create({ data: { title: "Findable Task" } });
+
+		const res = await request(app).get(`/api/tasks/${task.id}`);
+
+		expect(res.status).toBe(200);
+		expect(res.body.title).toBe("Findable Task");
+	});
+
+	it("should return 404 when task does not exist", async () => {
+		const res = await request(app).get("/api/tasks/999999");
+
+		expect(res.status).toBe(404);
+	});
+});
+
+describe("PUT /api/tasks/:id", () => {
+	it("should update the task", async () => {
+		const task = await testPrisma.task.create({ data: { title: "Old Title" } });
+
+		const res = await request(app)
+			.put(`/api/tasks/${task.id}`)
+			.send({ title: "New Title", completed: true });
+
+		expect(res.status).toBe(200);
+		expect(res.body.title).toBe("New Title");
+		expect(res.body.completed).toBe(true);
+	});
+
+	it("should return 404 when task does not exist", async () => {
+		const res = await request(app)
+			.put("/api/tasks/999999")
+			.send({ title: "New Title" });
+
+		expect(res.status).toBe(404);
+	});
+});
+
+describe("DELETE /api/tasks/:id", () => {
+	it("should delete the task", async () => {
+		const task = await testPrisma.task.create({ data: { title: "To Delete" } });
+
+		const res = await request(app).delete(`/api/tasks/${task.id}`);
+
+		expect(res.status).toBe(204);
+
+		const found = await testPrisma.task.findUnique({ where: { id: task.id } });
+		expect(found).toBeNull();
+	});
+
+	it("should return 404 when task does not exist", async () => {
+		const res = await request(app).delete("/api/tasks/999999");
+
+		expect(res.status).toBe(404);
+	});
+});
 });

@@ -63,9 +63,112 @@ describe("TaskController", () => {
 	});
 
 	// ... TODO: Add more tests
-	/*
 	describe("getTaskById", () => {
-		...	
+	it("should return 200 with the task when found", async () => {
+		mockService.findById.mockResolvedValue(mockTask);
+		const req = createMockRequest({ params: { id: "1" } });
+		const res = createMockResponse();
+
+		await taskController.getTaskById(req, res);
+
+		expect(mockService.findById).toHaveBeenCalledWith(1);
+		expect(res.status).toHaveBeenCalledWith(200);
+		expect(res.json).toHaveBeenCalledWith(mockTask);
 	});
-	*/
+
+	it("should return 404 when task is not found", async () => {
+		mockService.findById.mockResolvedValue(null);
+		const req = createMockRequest({ params: { id: "999" } });
+		const res = createMockResponse();
+
+		await taskController.getTaskById(req, res);
+
+		expect(res.status).toHaveBeenCalledWith(404);
+		expect(res.json).toHaveBeenCalledWith({ error: "Task not found" });
+	});
+
+	it("should return 400 when id is invalid", async () => {
+		const req = createMockRequest({ params: { id: "abc" } });
+		const res = createMockResponse();
+
+		await taskController.getTaskById(req, res);
+
+		expect(res.status).toHaveBeenCalledWith(400);
+		expect(res.json).toHaveBeenCalledWith({ error: "Invalid task ID" });
+	});
+});
+
+describe("createTask", () => {
+	it("should return 201 with the created task", async () => {
+		mockService.create.mockResolvedValue(mockTask);
+		const req = createMockRequest({ body: { title: "Test Task", description: "Test description" } });
+		const res = createMockResponse();
+
+		await taskController.createTask(req, res);
+
+		expect(mockService.create).toHaveBeenCalledWith({ title: "Test Task", description: "Test description" });
+		expect(res.status).toHaveBeenCalledWith(201);
+		expect(res.json).toHaveBeenCalledWith(mockTask);
+	});
+
+	it("should return 400 when title is missing", async () => {
+		const req = createMockRequest({ body: { description: "No title" } });
+		const res = createMockResponse();
+
+		await taskController.createTask(req, res);
+
+		expect(res.status).toHaveBeenCalledWith(400);
+		expect(mockService.create).not.toHaveBeenCalled();
+	});
+});
+
+describe("updateTask", () => {
+	it("should return 200 with the updated task", async () => {
+		const updated = { ...mockTask, title: "Updated" };
+		mockService.update.mockResolvedValue(updated);
+		const req = createMockRequest({ params: { id: "1" }, body: { title: "Updated" } });
+		const res = createMockResponse();
+
+		await taskController.updateTask(req, res);
+
+		expect(res.status).toHaveBeenCalledWith(200);
+		expect(res.json).toHaveBeenCalledWith(updated);
+	});
+
+	it("should return 404 when task does not exist", async () => {
+		mockService.update.mockRejectedValue(new Error("Task not found"));
+		const req = createMockRequest({ params: { id: "999" }, body: { title: "Updated" } });
+		const res = createMockResponse();
+
+		await taskController.updateTask(req, res);
+
+		expect(res.status).toHaveBeenCalledWith(404);
+		expect(res.json).toHaveBeenCalledWith({ error: "Task not found" });
+	});
+});
+
+describe("deleteTask", () => {
+	it("should return 204 when task is deleted", async () => {
+		mockService.remove.mockResolvedValue(mockTask);
+		const req = createMockRequest({ params: { id: "1" } });
+		const res = createMockResponse();
+
+		await taskController.deleteTask(req, res);
+
+		expect(mockService.remove).toHaveBeenCalledWith(1);
+		expect(res.status).toHaveBeenCalledWith(204);
+		expect(res.send).toHaveBeenCalled();
+	});
+
+	it("should return 404 when task does not exist", async () => {
+		mockService.remove.mockRejectedValue(new Error("Task not found"));
+		const req = createMockRequest({ params: { id: "999" } });
+		const res = createMockResponse();
+
+		await taskController.deleteTask(req, res);
+
+		expect(res.status).toHaveBeenCalledWith(404);
+		expect(res.json).toHaveBeenCalledWith({ error: "Task not found" });
+	});
+});
 });
