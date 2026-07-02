@@ -50,6 +50,7 @@ pipeline {
                 withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
                         docker run --rm \
+                            -e SONAR_HOST_URL=https://sonarqube.cicd.kits.ext.educentre.fr \
                             -e SONAR_TOKEN=$SONAR_TOKEN \
                             -v "$WORKSPACE:/usr/src" \
                             sonarsource/sonar-scanner-cli
