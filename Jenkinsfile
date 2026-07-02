@@ -19,6 +19,17 @@ pipeline {
             }
         }
 
+        stage('DIAG - volumes-from') {
+            steps {
+                sh '''
+                    echo "hostname (agent container id): $(hostname)"
+                    echo "WORKSPACE: $WORKSPACE"
+                    docker run --rm --volumes-from "$(hostname)" -w "$WORKSPACE" alpine \
+                        sh -c 'echo "--- ls WORKSPACE ---"; ls -la; echo "--- cat sonar-project.properties ---"; cat sonar-project.properties || echo FICHIER_NON_TROUVE'
+                '''
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 sh 'npm ci'
@@ -50,9 +61,10 @@ pipeline {
                 withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
                         docker run --rm \
+                            --volumes-from "$(hostname)" \
+                            -w "$WORKSPACE" \
                             -e SONAR_HOST_URL=https://sonarqube.cicd.kits.ext.educentre.fr \
                             -e SONAR_TOKEN=$SONAR_TOKEN \
-                            -v "$WORKSPACE:/usr/src" \
                             sonarsource/sonar-scanner-cli
                     '''
                 }
@@ -93,11 +105,12 @@ pipeline {
             steps {
                 sh '''
                     docker run --rm \
+                        --volumes-from "$(hostname)" \
+                        -w "$WORKSPACE" \
                         -v /var/run/docker.sock:/var/run/docker.sock \
-                        -v "$WORKSPACE:/out" \
                         anchore/syft:latest \
                         docker:$DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG \
-                        -o spdx-json=/out/sbom-spdx.json
+                        -o spdx-json=sbom-spdx.json
                 '''
             }
         }
