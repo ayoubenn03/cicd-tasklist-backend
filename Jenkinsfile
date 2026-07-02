@@ -19,17 +19,6 @@ pipeline {
             }
         }
 
-        stage('DIAG - volumes-from') {
-            steps {
-                sh '''
-                    echo "hostname (agent container id): $(hostname)"
-                    echo "WORKSPACE: $WORKSPACE"
-                    docker run --rm --volumes-from "$(hostname)" -w "$WORKSPACE" alpine \
-                        sh -c 'echo "--- ls WORKSPACE ---"; ls -la; echo "--- cat sonar-project.properties ---"; cat sonar-project.properties || echo FICHIER_NON_TROUVE'
-                '''
-            }
-        }
-
         stage('Install Dependencies') {
             steps {
                 sh 'npm ci'
