@@ -1,0 +1,14 @@
+node_modules
+dist
+reports
+coverage
+.git
+.gitignore
+.env
+.env.*
+*.log
+npm-debug.log*
+prisma/test.db
+prisma/schema-test.prisma
+.scannerwork
+sbom-spdx.json
