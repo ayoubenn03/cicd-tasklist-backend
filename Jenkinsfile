@@ -1,6 +1,17 @@
 pipeline {
     agent any
 
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        DOCKERHUB_USER = 'ayouben03'
+        IMAGE_NAME     = 'tasklist-backend'
+        IMAGE_TAG      = "${env.BUILD_NUMBER}"
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -8,33 +19,111 @@ pipeline {
             }
         }
 
-        stage('Diagnostic environnement agent') {
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm ci'
+            }
+        }
+
+        stage('Unit Tests') {
             steps {
                 sh '''
-                    echo "=== Agent info ==="
-                    hostname || true
-                    whoami || true
-                    uname -a || true
-                    echo ""
-                    echo "=== Node / npm ==="
-                    node -v || echo "node: NON DISPONIBLE"
-                    npm -v || echo "npm: NON DISPONIBLE"
-                    echo ""
-                    echo "=== Docker ==="
-                    docker -v || echo "docker: NON DISPONIBLE"
-                    docker info >/dev/null 2>&1 && echo "docker daemon: OK (accessible)" || echo "docker daemon: NON ACCESSIBLE"
-                    echo ""
-                    echo "=== Trivy ==="
-                    trivy -v || echo "trivy: NON DISPONIBLE"
-                    echo ""
-                    echo "=== sonar-scanner ==="
-                    sonar-scanner -v || echo "sonar-scanner: NON DISPONIBLE"
-                    echo ""
-                    echo "=== SBOM (syft / cdxgen) ==="
-                    syft version || echo "syft: NON DISPONIBLE"
-                    cdxgen -v || echo "cdxgen: NON DISPONIBLE"
+                    npx vitest run --config vitest.config.ts unit \
+                        --coverage --coverage.reportsDirectory=coverage/unit \
+                        --outputFile.junit=reports/junit-unit.xml
                 '''
             }
+        }
+
+        stage('E2E Tests') {
+            steps {
+                sh '''
+                    npx vitest run --config vitest.config.ts e2e \
+                        --coverage --coverage.reportsDirectory=coverage/e2e \
+                        --outputFile.junit=reports/junit-e2e.xml
+                '''
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        docker run --rm \
+                            -e SONAR_TOKEN=$SONAR_TOKEN \
+                            -v "$WORKSPACE:/usr/src" \
+                            sonarsource/sonar-scanner-cli
+                    '''
+                }
+            }
+        }
+
+        stage('Build Application') {
+            steps {
+                sh '''
+                    npx prisma generate
+                    npm run build
+                '''
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh '''
+                    docker build \
+                        -t $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG \
+                        -t $DOCKERHUB_USER/$IMAGE_NAME:latest \
+                        .
+                '''
+            }
+        }
+
+        stage('Trivy Scan') {
+            steps {
+                sh '''
+                    trivy image --exit-code 0 --severity HIGH,CRITICAL \
+                        --format table \
+                        $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG | tee trivy-report.txt
+                '''
+            }
+        }
+
+        stage('SBOM SPDX') {
+            steps {
+                sh '''
+                    docker run --rm \
+                        -v /var/run/docker.sock:/var/run/docker.sock \
+                        -v "$WORKSPACE:/out" \
+                        anchore/syft:latest \
+                        docker:$DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG \
+                        -o spdx-json=/out/sbom-spdx.json
+                '''
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKERHUB_LOGIN_USER',
+                    passwordVariable: 'DOCKERHUB_LOGIN_PASS'
+                )]) {
+                    sh '''
+                        echo "$DOCKERHUB_LOGIN_PASS" | docker login -u "$DOCKERHUB_LOGIN_USER" --password-stdin
+                        docker push $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG
+                        docker push $DOCKERHUB_USER/$IMAGE_NAME:latest
+                        docker logout
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            junit testResults: 'reports/junit-*.xml', allowEmptyResults: true
+            archiveArtifacts artifacts: 'trivy-report.txt,sbom-spdx.json,coverage/**,reports/**', allowEmptyArchive: true
+            sh 'docker rmi $DOCKERHUB_USER/$IMAGE_NAME:$IMAGE_TAG $DOCKERHUB_USER/$IMAGE_NAME:latest || true'
         }
     }
 }
